@@ -1,6 +1,7 @@
 import express from 'express'
 import http from 'http'
 import cors from 'cors'
+import mongoose from 'mongoose'
 import { ApolloServer } from '@apollo/server'
 import { expressMiddleware } from '@apollo/server/express4'
 import { gql } from 'graphql-tag'
@@ -21,6 +22,15 @@ const startServer = async () => {
   const app = express()
   const httpServer = http.createServer(app)
   const port = 4000
+
+  const MONGO_URI = 'mongodb://127.0.0.1:27017/realworld_db'
+
+  try {
+    await mongoose.connect(MONGO_URI)
+    console.log('🔌 Connected to MongoDB')
+  } catch (err) {
+    console.error('❌ Error connecting to MongoDB:', err)
+  }
 
   const server = new ApolloServer({
     typeDefs,
