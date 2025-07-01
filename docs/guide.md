@@ -56,3 +56,58 @@ tsconfig.json
 Use [`ts-node-dev`](https://www.npmjs.com/package/ts-node-dev) to run node server.
 
 It restarts target node process when smth change (shares TS compilation process between restarts)
+
+## Client
+
+`yarn create vite client --template react-ts`
+
+```bash
+cd client
+yarn install
+yarn dev
+```
+
+## DB
+
+Make sure there isn't any other older version of mongoDb
+
+If yes, then uninstall it first
+
+```bash
+brew uninstall mongodb-community 
+brew uninstall mongodb-database-tools
+brew uninstall mongosh
+brew untap mongodb/brew
+```
+
+Install `mongodb-commuinty@8.0` 
+
+```bash
+brew install mongodb-community@8.0
+brew services start mongodb-community@8.0
+brew services list
+```
+
+Run `mongodb-commuinty@8.0` shell
+
+```bash
+mongosh
+```
+
+You should see
+
+```bash
+Current Mongosh Log ID: 6862ba5788fc7a54cdf49edb
+Connecting to:          mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=mongosh+2.5.3
+Using MongoDB:          8.0.10
+Using Mongosh:          2.5.3
+
+For mongosh info see: https://www.mongodb.com/docs/mongodb-shell/
+
+------
+   The server generated these startup warnings when booting
+   2025-06-30T18:24:47.997+02:00: Access control is not enabled for the database. Read and write access to data and configuration is unrestricted
+------
+
+test>
+```
