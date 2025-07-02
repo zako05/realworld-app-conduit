@@ -1,0 +1,23 @@
+{
+  "name": "server",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only ./src/index.ts"
+  },
+  "packageManager": "yarn@4.9.2",
+  "dependencies": {
+    "@apollo/server": "^4.12.2",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "graphql": "^16.11.0",
+    "mongoose": "^8.16.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.4",
+    "dotenv": "^17.0.1",
+    "graphql-tag": "^2.12.6",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  }
+}
