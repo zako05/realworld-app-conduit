@@ -1,7 +1,7 @@
 import express from "express";
 import http from "http";
 import cors from "cors";
-import mongoose from "mongoose";
+import mongoose, { Document } from "mongoose";
 import process from "process";
 import * as dotenv from "dotenv";
 import { ApolloServer } from "@apollo/server";
@@ -17,7 +17,7 @@ dotenv.config({ path: process.env.ENV_FILE ?? ".env" });
 
 interface UserDocument extends Document {
   comparePassword: (password: string) => Promise<boolean>;
-  id: number;
+  id: string;
   username: string;
   email: string;
   bio?: string;
@@ -79,22 +79,34 @@ const resolvers = {
   Mutation: {
     registerUser: async (_, { username, email, password }) => {
       if (!username || !email || !password) {
-        throw new Error("Username, email, and password are required!");
+        throw new GraphQLError("Username, email, and password are required!");
       }
 
       if (!/\S+@\S+\.\S+/.test(email)) {
-        throw new Error("Invalid email format!");
+        throw new GraphQLError("Invalid email format!");
       }
 
       if (!/^[a-zA-Z0-9]+$/.test(username)) {
-        throw new Error("Username can only contain letters and numbers!");
+        throw new GraphQLError(
+          "Username can only contain letters and numbers!",
+        );
+      }
+
+      if (password.length < 8) {
+        throw new GraphQLError("Password must be at least 8 characters long!");
+      }
+
+      if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+        throw new GraphQLError(
+          "Password must contain at least one uppercase letter, one lowercase letter, and one number!",
+        );
       }
 
       const existingUser = await User.findOne({
         $or: [{ email }, { username }],
       });
       if (existingUser) {
-        throw new Error("User with this email or username already exists!");
+        throw new GraphQLError("User with this email or username already exists!");
       }
 
       const user = new User({ username, email, password });
@@ -184,6 +196,10 @@ const startServer = async () => {
 
         if (authHeader.startsWith("Bearer ")) {
           const token = authHeader.substring(7, authHeader.length);
+
+          if (!token || token.trim() === "") {
+            return { user: null };
+          }
 
           try {
             const decoded = jwt.verify(

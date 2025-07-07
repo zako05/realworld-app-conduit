@@ -42,7 +42,7 @@ yarn add concurrently -D
 [Install Apollo Server integration with Express 5](https://www.npmjs.com/package/@as-integrations/express5)
 
 ```bash
-yarn add express graphql cors @apollo/server @as-intergrations/express5 mongoose
+yarn add express graphql cors @apollo/server @as-integrations/express5 mongoose bcryptjs jsonwebtoken
 ```
 
 **Dev Dependencies:**
