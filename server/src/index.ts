@@ -5,20 +5,140 @@ import mongoose from 'mongoose'
 import process from 'process'
 import * as dotenv from 'dotenv'
 import { ApolloServer } from '@apollo/server'
-import { expressMiddleware } from '@apollo/server/express4'
+import { expressMiddleware } from '@as-integrations/express5'
+import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer'
 import { gql } from 'graphql-tag'
+import jwt from 'jsonwebtoken'
+import { GraphQLError } from 'graphql'
+
+import User from './models/User'
 
 dotenv.config({ path: process.env.ENV_FILE ?? '.env' })
 
+interface UserDocument extends Document {
+  comparePassword: (password: string) => Promise<boolean>
+  id: number
+  username: string
+  email: string
+  bio?: string
+  image?: string
+}
+
+interface MyContext {
+  user?: UserDocument | null
+}
+
 const typeDefs = gql`
+  type User {
+    id: ID!
+    username: String!
+    email: String!
+    bio: String
+    image: String
+    token: String!
+  }
+
   type Query {
     hello: String
+    currentUser: User
+  }
+
+  type Mutation {
+    registerUser(
+      username: String!
+      email: String!
+      password: String!
+    ): User
+    loginUser(
+      email: String!
+      password: String!
+    ): User
   }
 `
 
 const resolvers = {
   Query: {
     hello: () => 'Hello from the GraphQL server!',
+    currentUser: async (_, __, context: MyContext) => {
+      if (!context.user) {
+        throw new GraphQLError('Not authenticated!', {
+          extensions: { code: 'UNAUTHENCTICATED' }
+        })
+      }
+
+      return {
+        id: context.user.id,
+        username: context.user.username,
+        email: context.user.email,
+        bio: context.user.bio,
+        image: context.user.image,
+        token: jwt.sign(
+          { id: context.user.id, email: context.user.email },
+          process.env.JWT_TOKEN || 'YOUR_SECRET_KEY',
+          { expiresIn: '1h' }
+        )
+      }
+    },
+  },
+  Mutation: {
+    registerUser: async (_, { username, email, password }) => {
+      if (!username || !email || !password) {
+        throw new Error(
+          'Username, email, and password are required!'
+        )
+      }
+
+      const existingUser =
+        await User.findOne({ $or: [{ email }, { username }] })
+      if (existingUser) {
+        throw new Error(
+          'User with this email or username already exists!'
+        )
+      }
+
+      const user = new User({ username, email, password })
+      await user.save()
+
+      const token = jwt.sign({
+        id: user.id,
+        email: user.email
+      }, 'YOUR_SECRET_KEY', { expiresIn: '1h' })
+
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        bio: user.bio,
+        image: user.image,
+        token
+      }
+    },
+    loginUser: async (_, { email, password }) => {
+      const user = await User.findOne({ email }) as UserDocument | null
+      if (!user) {
+        throw new Error('No user found with this email addres.')
+      }
+
+      const isValidPassword = await user.comparePassword(password)
+      if (!isValidPassword) {
+        throw new Error('Invalid password!')
+      }
+
+      const token = jwt.sign(
+        { id: user.id, email: user.email },
+        process.env.JWT_TOKEN || 'YOUR_SECRET_KEY',
+        { expiresIn: '1h' }
+      )
+
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        bio: user.bio,
+        image: user.image,
+        token
+      }
+    },
   },
 }
 
@@ -37,9 +157,10 @@ const startServer = async () => {
     process.exit(1)
   }
 
-  const server = new ApolloServer({
+  const server = new ApolloServer<MyContext>({
     typeDefs,
     resolvers,
+    plugins: [ApolloServerPluginDrainHttpServer({ httpServer })]
   })
 
   await server.start()
@@ -48,7 +169,31 @@ const startServer = async () => {
     '/graphql',
     cors<cors.CorsRequest>(),
     express.json(),
-    expressMiddleware(server),
+    expressMiddleware(server, {
+      context: async ({ req }) => {
+        const authHeader = req.headers.authorization || ''
+
+        if (authHeader.startsWith('Bearer ')) {
+          const token = authHeader.substring(7, authHeader.length)
+
+          try {
+            const decoded =
+              jwt.verify(
+                token,
+                process.env.JWT_SECRET || 'YOUR_SECRET_KEY'
+              ) as { id: string }
+            const user =
+              await User.findById(decoded.id) as UserDocument | null
+
+            return { user }
+          } catch (err) {
+            console.log('Invalid token!')
+          }
+        }
+
+        return { user: null }
+      },
+    }),
   )
 
   await new Promise<void>(resolve => httpServer.listen({ port }, resolve))
