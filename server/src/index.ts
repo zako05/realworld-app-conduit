@@ -1,31 +1,31 @@
-import express from 'express'
-import http from 'http'
-import cors from 'cors'
-import mongoose from 'mongoose'
-import process from 'process'
-import * as dotenv from 'dotenv'
-import { ApolloServer } from '@apollo/server'
-import { expressMiddleware } from '@as-integrations/express5'
-import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer'
-import { gql } from 'graphql-tag'
-import jwt from 'jsonwebtoken'
-import { GraphQLError } from 'graphql'
+import express from "express";
+import http from "http";
+import cors from "cors";
+import mongoose from "mongoose";
+import process from "process";
+import * as dotenv from "dotenv";
+import { ApolloServer } from "@apollo/server";
+import { expressMiddleware } from "@as-integrations/express5";
+import { ApolloServerPluginDrainHttpServer } from "@apollo/server/plugin/drainHttpServer";
+import { gql } from "graphql-tag";
+import jwt from "jsonwebtoken";
+import { GraphQLError } from "graphql";
 
-import User from './models/User'
+import User from "./models/User";
 
-dotenv.config({ path: process.env.ENV_FILE ?? '.env' })
+dotenv.config({ path: process.env.ENV_FILE ?? ".env" });
 
 interface UserDocument extends Document {
-  comparePassword: (password: string) => Promise<boolean>
-  id: number
-  username: string
-  email: string
-  bio?: string
-  image?: string
+  comparePassword: (password: string) => Promise<boolean>;
+  id: number;
+  username: string;
+  email: string;
+  bio?: string;
+  image?: string;
 }
 
 interface MyContext {
-  user?: UserDocument | null
+  user?: UserDocument | null;
 }
 
 const typeDefs = gql`
@@ -44,26 +44,19 @@ const typeDefs = gql`
   }
 
   type Mutation {
-    registerUser(
-      username: String!
-      email: String!
-      password: String!
-    ): User
-    loginUser(
-      email: String!
-      password: String!
-    ): User
+    registerUser(username: String!, email: String!, password: String!): User
+    loginUser(email: String!, password: String!): User
   }
-`
+`;
 
 const resolvers = {
   Query: {
-    hello: () => 'Hello from the GraphQL server!',
+    hello: () => "Hello from the GraphQL server!",
     currentUser: async (_, __, context: MyContext) => {
       if (!context.user) {
-        throw new GraphQLError('Not authenticated!', {
-          extensions: { code: 'UNAUTHENCTICATED' }
-        })
+        throw new GraphQLError("Not authenticated!", {
+          extensions: { code: "UNAUTHENTICATED" },
+        });
       }
 
       return {
@@ -73,36 +66,48 @@ const resolvers = {
         bio: context.user.bio,
         image: context.user.image,
         token: jwt.sign(
-          { id: context.user.id, email: context.user.email },
-          process.env.JWT_TOKEN || 'YOUR_SECRET_KEY',
-          { expiresIn: '1h' }
-        )
-      }
+          {
+            id: context.user.id,
+            email: context.user.email,
+          },
+          process.env.JWT_SECRET || "YOUR_SECRET_KEY",
+          { expiresIn: "1h" },
+        ),
+      };
     },
   },
   Mutation: {
     registerUser: async (_, { username, email, password }) => {
       if (!username || !email || !password) {
-        throw new Error(
-          'Username, email, and password are required!'
-        )
+        throw new Error("Username, email, and password are required!");
       }
 
-      const existingUser =
-        await User.findOne({ $or: [{ email }, { username }] })
+      if (!/\S+@\S+\.\S+/.test(email)) {
+        throw new Error("Invalid email format!");
+      }
+
+      if (!/^[a-zA-Z0-9]+$/.test(username)) {
+        throw new Error("Username can only contain letters and numbers!");
+      }
+
+      const existingUser = await User.findOne({
+        $or: [{ email }, { username }],
+      });
       if (existingUser) {
-        throw new Error(
-          'User with this email or username already exists!'
-        )
+        throw new Error("User with this email or username already exists!");
       }
 
-      const user = new User({ username, email, password })
-      await user.save()
+      const user = new User({ username, email, password });
+      await user.save();
 
-      const token = jwt.sign({
-        id: user.id,
-        email: user.email
-      }, 'YOUR_SECRET_KEY', { expiresIn: '1h' })
+      const token = jwt.sign(
+        {
+          id: user.id,
+          email: user.email,
+        },
+        process.env.JWT_SECRET || "YOUR_SECRET_KEY",
+        { expiresIn: "1h" },
+      );
 
       return {
         id: user.id,
@@ -110,25 +115,28 @@ const resolvers = {
         email: user.email,
         bio: user.bio,
         image: user.image,
-        token
-      }
+        token,
+      };
     },
     loginUser: async (_, { email, password }) => {
-      const user = await User.findOne({ email }) as UserDocument | null
+      const user = (await User.findOne({ email })) as UserDocument | null;
       if (!user) {
-        throw new Error('No user found with this email addres.')
+        throw new Error("No user found with this email address.");
       }
 
-      const isValidPassword = await user.comparePassword(password)
+      const isValidPassword = await user.comparePassword(password);
       if (!isValidPassword) {
-        throw new Error('Invalid password!')
+        throw new Error("Invalid password!");
       }
 
       const token = jwt.sign(
-        { id: user.id, email: user.email },
-        process.env.JWT_TOKEN || 'YOUR_SECRET_KEY',
-        { expiresIn: '1h' }
-      )
+        {
+          id: user.id,
+          email: user.email,
+        },
+        process.env.JWT_SECRET || "YOUR_SECRET_KEY",
+        { expiresIn: "1h" },
+      );
 
       return {
         id: user.id,
@@ -136,69 +144,72 @@ const resolvers = {
         email: user.email,
         bio: user.bio,
         image: user.image,
-        token
-      }
+        token,
+      };
     },
   },
-}
+};
 
 const startServer = async () => {
-  const app = express()
-  const httpServer = http.createServer(app)
-  const port = process.env.PORT || 4000
+  const app = express();
+  const httpServer = http.createServer(app);
+  const port = process.env.PORT || 4000;
 
-  const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/realworld_db'
+  const MONGO_URI =
+    process.env.MONGO_URI || "mongodb://127.0.0.1:27017/realworld_db";
 
   try {
-    await mongoose.connect(MONGO_URI)
-    console.log('🔌 Connected to MongoDB')
+    await mongoose.connect(MONGO_URI);
+    console.log("🔌 Connected to MongoDB");
   } catch (err) {
-    console.error('❌ Error connecting to MongoDB:', err)
-    process.exit(1)
+    console.error("❌ Error connecting to MongoDB:", err);
+    process.exit(1);
   }
 
   const server = new ApolloServer<MyContext>({
     typeDefs,
     resolvers,
-    plugins: [ApolloServerPluginDrainHttpServer({ httpServer })]
-  })
+    plugins: [ApolloServerPluginDrainHttpServer({ httpServer })],
+  });
 
-  await server.start()
+  await server.start();
 
   app.use(
-    '/graphql',
+    "/graphql",
     cors<cors.CorsRequest>(),
     express.json(),
     expressMiddleware(server, {
       context: async ({ req }) => {
-        const authHeader = req.headers.authorization || ''
+        const authHeader = req.headers.authorization || "";
 
-        if (authHeader.startsWith('Bearer ')) {
-          const token = authHeader.substring(7, authHeader.length)
+        if (authHeader.startsWith("Bearer ")) {
+          const token = authHeader.substring(7, authHeader.length);
 
           try {
-            const decoded =
-              jwt.verify(
-                token,
-                process.env.JWT_SECRET || 'YOUR_SECRET_KEY'
-              ) as { id: string }
-            const user =
-              await User.findById(decoded.id) as UserDocument | null
+            const decoded = jwt.verify(
+              token,
+              process.env.JWT_SECRET || "YOUR_SECRET_KEY",
+            ) as {
+              id: string;
+            };
+            const user = (await User.findById(
+              decoded.id,
+            )) as UserDocument | null;
 
-            return { user }
+            return { user };
           } catch (err) {
-            console.log('Invalid token!')
+            console.log("Invalid token!");
           }
         }
 
-        return { user: null }
+        return { user: null };
       },
     }),
-  )
+  );
 
-  await new Promise<void>(resolve => httpServer.listen({ port }, resolve))
+  await new Promise<void>((resolve) => httpServer.listen({ port }, resolve));
 
-  console.log(`🚀 Server ready at http://localhost:${port}/graphql`)
-}
+  console.log(`🚀 Server ready at http://localhost:${port}/graphql`);
+};
 
-startServer()
+startServer();
