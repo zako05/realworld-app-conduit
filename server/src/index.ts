@@ -106,7 +106,9 @@ const resolvers = {
         $or: [{ email }, { username }],
       });
       if (existingUser) {
-        throw new GraphQLError("User with this email or username already exists!");
+        throw new GraphQLError(
+          "User with this email or username already exists!",
+        );
       }
 
       const user = new User({ username, email, password });
@@ -133,12 +135,12 @@ const resolvers = {
     loginUser: async (_, { email, password }) => {
       const user = (await User.findOne({ email })) as UserDocument | null;
       if (!user) {
-        throw new Error("No user found with this email address.");
+        throw new GraphQLError("No user found with this email address.");
       }
 
       const isValidPassword = await user.comparePassword(password);
       if (!isValidPassword) {
-        throw new Error("Invalid password!");
+        throw new GraphQLError("Invalid password!");
       }
 
       const token = jwt.sign(
